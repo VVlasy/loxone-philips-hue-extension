@@ -64,13 +64,13 @@
 -   [x] Pages:
     -   **Dashboard**: show bridge status (Hue connected? CAN
         connected?).
-    -   [ ] **Pairing**: start Hue bridge pairing flow, show instructions,
+    -   [x] **Pairing**: start Hue bridge pairing flow, show instructions,
         confirm success.
-    -   [ ] **Unpairing**: delete app key, reset Hue config.
+    -   [x] **Unpairing**: delete app key, reset Hue config.
     -   [ ] **Mappings**: list NAT devices (from observed CAN frames), allow
         mapping to Hue lights/groups.
-    -   [ ] **Logs**: live stream of events (CAN frames + Hue actions).
-    -   [ ] **Settings**: CAN bitrate, log level, restart service,
+    -   [x] **Logs**: live stream of events (CAN frames + Hue actions).
+    -   [x] **Settings**: CAN bitrate, log level, restart service,
         export/import config.
 -   [x] Implement WebSocket or SignalR for live log updates.
 

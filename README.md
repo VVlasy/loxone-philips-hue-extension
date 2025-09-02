@@ -14,13 +14,15 @@ A C# .NET application that bridges Loxone NAT (CAN Bus) protocol to Philips Hue 
 - ✅ Structured logging with Serilog (console + file)
 - ✅ Background services for CAN monitoring and Hue management
 - ✅ Configuration via appsettings.json with hot-reload support
+- ✅ Pairing/Unpairing UI pages
 
 🚧 **In Progress:**
-- Pairing/Unpairing UI pages
 - Mappings management interface
-- Live logs viewer
-- Settings configuration page
 - TailwindCSS styling
+- Loxone connection
+- Manual setup
+- Tests
+- Pairing auto retry for the 30 seconds when pressing pair, 
 
 📋 **Planned:**
 - Mock mode for testing without real hardware
