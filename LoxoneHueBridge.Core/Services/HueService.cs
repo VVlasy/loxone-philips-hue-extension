@@ -105,8 +105,7 @@ public class HueService : IHueService
 
             _logger.LogInformation("Discovering Hue Bridge on network...");
             
-            var locator = new HttpBridgeLocator();
-            var bridges = await locator.LocateBridgesAsync(TimeSpan.FromSeconds(10));
+            var bridges = await HueBridgeDiscovery.FastDiscoveryWithNetworkScanFallbackAsync(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
             
             var bridge = bridges.FirstOrDefault();
             if (bridge == null)
@@ -428,9 +427,8 @@ public class HueService : IHueService
     {
         try
         {
-            var locator = new HttpBridgeLocator();
-            var bridges = await locator.LocateBridgesAsync(TimeSpan.FromSeconds(20));
-            
+            var bridges = await HueBridgeDiscovery.FastDiscoveryWithNetworkScanFallbackAsync(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30));
+
             return bridges.Select(b => new DiscoveredBridge
             {
                 IpAddress = b.IpAddress,
