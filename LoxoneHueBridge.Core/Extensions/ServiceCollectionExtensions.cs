@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         // Core Services
         services.AddSingleton<INatParser, NatParser>();
         services.AddSingleton<IMappingService, MappingService>();
+        services.AddSingleton<IConfigurationUpdateService, ConfigurationUpdateService>();
         services.AddSingleton<IHueService, HueService>();
         services.AddSingleton<INatToHueMapper, NatToHueMapper>();
         

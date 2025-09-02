@@ -77,36 +77,73 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="post" asp-page-handler="UpdateHue">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="autoDiscover" name="autoDiscover" 
-                                           @(Model.Settings.HueBridge.AutoDiscover ? "checked" : "")>
-                                    <label class="form-check-label" for="autoDiscover">
-                                        Auto-discover Bridge
-                                    </label>
-                                    <div class="form-text">Automatically find Hue Bridge on network startup</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="manualIpAddress" class="form-label">Manual IP Address</label>
-                                <input type="text" class="form-control" id="manualIpAddress" name="manualIpAddress" 
-                                       value="@Model.Settings.HueBridge.ManualIpAddress" 
-                                       placeholder="192.168.1.100">
-                                <div class="form-text">Use if auto-discovery fails</div>
-                            </div>
-                        </div>
+                @if (!string.IsNullOrEmpty(Model.Settings.HueBridge.AppKey) && !string.IsNullOrEmpty(Model.Settings.HueBridge.ManualIpAddress))
+                {
+                    <div class="alert alert-success" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-check-circle"></i> Bridge Paired
+                        </h6>
+                        <p class="mb-2">Your Hue Bridge is successfully paired and configured.</p>
+                        <p class="mb-0">
+                            <strong>Bridge IP:</strong> @Model.Settings.HueBridge.ManualIpAddress<br>
+                            <strong>Status:</strong> <span class="badge bg-success">Connected</span>
+                        </p>
                     </div>
+                    
+                    <div class="d-flex gap-2">
+                        <a href="/pairing" class="btn btn-outline-primary">
+                            <i class="fas fa-cog"></i> Manage Pairing
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" onclick="confirmUnpair()">
+                            <i class="fas fa-unlink"></i> Unpair Bridge
+                        </button>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(Model.Settings.HueBridge.AppKey))
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-triangle"></i> Bridge Paired but IP Unknown
+                        </h6>
+                        <p class="mb-2">You have pairing credentials but the bridge IP needs to be rediscovered.</p>
+                        <p class="mb-0">This can happen if the bridge IP address changed.</p>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <a href="/pairing" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Rediscover Bridge
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" onclick="confirmUnpair()">
+                            <i class="fas fa-unlink"></i> Clear Pairing
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle"></i> No Bridge Paired
+                        </h6>
+                        <p class="mb-2">You need to pair with a Hue Bridge to control your lights.</p>
+                        <p class="mb-0">Use the pairing page to discover and connect to your bridge.</p>
+                    </div>
+                    
+                    <a href="/pairing" class="btn btn-primary">
+                        <i class="fas fa-link"></i> Go to Pairing
+                    </a>
+                }
+
+                <hr class="my-4">
+
+                <form method="post" asp-page-handler="UpdateHue">
+                    <h6 class="mb-3">Application Identity</h6>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="applicationName" class="form-label">Application Name</label>
                                 <input type="text" class="form-control" id="applicationName" name="applicationName" 
                                        value="@Model.Settings.HueBridge.ApplicationName" required>
+                                <div class="form-text">Name shown to Hue Bridge for this application</div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -114,24 +151,12 @@
                                 <label for="deviceName" class="form-label">Device Name</label>
                                 <input type="text" class="form-control" id="deviceName" name="deviceName" 
                                        value="@Model.Settings.HueBridge.DeviceName" required>
+                                <div class="form-text">Device name shown in Hue app</div>
                             </div>
                         </div>
                     </div>
-                    @if (!string.IsNullOrEmpty(Model.Settings.HueBridge.AppKey))
-                    {
-                        <div class="mb-3">
-                            <label class="form-label">Current App Key</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" value="@Model.Settings.HueBridge.AppKey" readonly>
-                                <button type="button" class="btn btn-outline-danger" onclick="clearAppKey()">
-                                    <i class="fas fa-trash"></i> Clear
-                                </button>
-                            </div>
-                            <div class="form-text">Clear this to re-pair with the bridge</div>
-                        </div>
-                    }
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Update Hue Settings
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-save"></i> Update Identity Settings
                     </button>
                 </form>
             </div>
@@ -324,20 +349,12 @@
         }
 
         function clearAppKey() {
-            if (confirm('Are you sure you want to clear the Hue Bridge app key? You will need to re-pair with the bridge.')) {
-                fetch('/api/hue/clear-appkey', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            showAlert('App key cleared successfully. Please re-pair with your Hue Bridge.', 'success');
-                            setTimeout(() => window.location.reload(), 2000);
-                        } else {
-                            showAlert('Error clearing app key: ' + data.message, 'danger');
-                        }
-                    })
-                    .catch(error => {
-                        showAlert('Error clearing app key: ' + error.message, 'danger');
-                    });
+            confirmUnpair();
+        }
+
+        function confirmUnpair() {
+            if (confirm('Are you sure you want to unpair from the Hue Bridge? You will need to re-pair to control lights again.')) {
+                window.location.href = '/pairing';
             }
         }
 

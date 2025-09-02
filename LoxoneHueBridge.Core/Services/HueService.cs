@@ -37,15 +37,17 @@ public class HueService : IHueService
 {
     private readonly ILogger<HueService> _logger;
     private readonly IOptionsMonitor<LoxoneHueBridgeConfig> _config;
+    private readonly IConfigurationUpdateService _configUpdateService;
     private LocalHueApi? _client;
     private BridgeStatus? _bridgeStatus = null;
 
     public BridgeStatus? BridgeStatus => _bridgeStatus;
 
-    public HueService(ILogger<HueService> logger, IOptionsMonitor<LoxoneHueBridgeConfig> config)
+    public HueService(ILogger<HueService> logger, IOptionsMonitor<LoxoneHueBridgeConfig> config, IConfigurationUpdateService configUpdateService)
     {
         _logger = logger;
         _config = config;
+        _configUpdateService = configUpdateService;
         
         // Initialize bridge status with current configuration
         UpdateBridgeStatusFromConfig();
@@ -55,8 +57,8 @@ public class HueService : IHueService
     {
         var config = _config.CurrentValue.HueBridge;
         
-        // Only create bridge status if we have some bridge information
-        if (!config.AutoDiscover && !string.IsNullOrEmpty(config.ManualIpAddress))
+        // If we have a manual IP address or auto-discover is disabled, use the configured IP
+        if (!string.IsNullOrEmpty(config.ManualIpAddress))
         {
             _bridgeStatus = new BridgeStatus
             {
@@ -65,16 +67,19 @@ public class HueService : IHueService
                 AppKey = config.AppKey,
                 IsConnected = false
             };
+            _logger.LogInformation("Loaded bridge configuration: IP={IpAddress}, Paired={IsPaired}", 
+                _bridgeStatus.IpAddress, _bridgeStatus.IsPaired);
         }
         else if (!string.IsNullOrEmpty(config.AppKey))
         {
-            // We have credentials but no IP - this means we were paired before
+            // We have credentials but no IP - this means we were paired before but IP was lost
             _bridgeStatus = new BridgeStatus
             {
                 IsPaired = true,
                 AppKey = config.AppKey,
                 IsConnected = false
             };
+            _logger.LogWarning("Found AppKey but no bridge IP address - bridge will need to be rediscovered");
         }
         // If no manual IP and no app key, leave _bridgeStatus as null (no bridge discovered)
     }
@@ -147,6 +152,13 @@ public class HueService : IHueService
             {
                 var appKey = result.Username;
                 _logger.LogInformation("Successfully paired with Hue Bridge. App Key: {AppKey}", appKey);
+                
+                // Persist the bridge configuration
+                await _configUpdateService.UpdateHueBridgeConfigAsync(
+                    ipAddress: _bridgeStatus.IpAddress,
+                    appKey: appKey,
+                    autoDiscover: false // Set to false since we now have a known bridge
+                );
                 
                 // Initialize client with new app key
                 _client = new LocalHueApi(_bridgeStatus.IpAddress, appKey);
@@ -295,17 +307,22 @@ public class HueService : IHueService
 
         try
         {
-            UpdateLight updateLight = null;
+            UpdateLight updateLight;
             
             if (brightness.HasValue && on)
             {
                 updateLight = new UpdateLight().TurnOn().SetBrightness(brightness.Value / 254.0 * 100.0); // Convert from 0-254 to 0-100
-            } else
+            } 
+            else if (on)
+            {
+                updateLight = new UpdateLight().TurnOn();
+            }
+            else
             {
                 updateLight = new UpdateLight().TurnOff();
             }
 
-                await _client.UpdateLightAsync(lightId, updateLight);
+            await _client.UpdateLightAsync(lightId, updateLight);
             _logger.LogDebug("Set light {LightId} state: On={On}, Brightness={Brightness}", lightId, on, brightness);
             return true;
         }
@@ -357,17 +374,22 @@ public class HueService : IHueService
 
         try
         {
-            UpdateGroupedLight updateGroupedLight = null;
+            UpdateGroupedLight updateGroupedLight;
             
             if (brightness.HasValue && on)
             {
                 updateGroupedLight = new UpdateGroupedLight().TurnOn().SetBrightness(brightness.Value / 254.0 * 100.0); // Convert from 0-254 to 0-100
-            } else
+            } 
+            else if (on)
+            {
+                updateGroupedLight = new UpdateGroupedLight().TurnOn();
+            }
+            else
             {
                 updateGroupedLight = new UpdateGroupedLight().TurnOff();
             }
 
-                await _client.UpdateGroupedLightAsync(groupId, updateGroupedLight);
+            await _client.UpdateGroupedLightAsync(groupId, updateGroupedLight);
             _logger.LogDebug("Set group {GroupId} state: On={On}, Brightness={Brightness}", groupId, on, brightness);
             return true;
         }
@@ -407,7 +429,7 @@ public class HueService : IHueService
         try
         {
             var locator = new HttpBridgeLocator();
-            var bridges = await locator.LocateBridgesAsync(TimeSpan.FromSeconds(5));
+            var bridges = await locator.LocateBridgesAsync(TimeSpan.FromSeconds(20));
             
             return bridges.Select(b => new DiscoveredBridge
             {
@@ -518,9 +540,14 @@ public class HueService : IHueService
     {
         try
         {
-            // Clear the app key from configuration
-            // Note: In a real implementation, you would update the configuration file
-            _logger.LogInformation("Unpaired from Hue Bridge");
+            // Clear the app key and bridge IP from configuration
+            await _configUpdateService.UpdateHueBridgeConfigAsync(
+                ipAddress: null,
+                appKey: null,
+                autoDiscover: true // Reset to auto-discover mode
+            );
+            
+            _logger.LogInformation("Unpaired from Hue Bridge and cleared configuration");
             _client = null;
             
             if (_bridgeStatus != null)
@@ -528,6 +555,9 @@ public class HueService : IHueService
                 _bridgeStatus.IsPaired = false;
                 _bridgeStatus.AppKey = null;
                 _bridgeStatus.IsConnected = false;
+                _bridgeStatus.IpAddress = null; // Clear the IP address as well
+                _bridgeStatus.BridgeId = null;
+                _bridgeStatus.ApiVersion = null;
             }
         }
         catch (Exception ex)

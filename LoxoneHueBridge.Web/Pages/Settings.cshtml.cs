@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using LoxoneHueBridge.Core.Configuration;
+using LoxoneHueBridge.Core.Services;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
@@ -12,12 +13,18 @@ namespace LoxoneHueBridge.Web.Pages
     {
         private readonly IOptionsSnapshot<LoxoneHueBridgeConfig> _config;
         private readonly IConfiguration _configuration;
+        private readonly IConfigurationUpdateService _configUpdateService;
         private readonly ILogger<SettingsModel> _logger;
 
-        public SettingsModel(IOptionsSnapshot<LoxoneHueBridgeConfig> config, IConfiguration configuration, ILogger<SettingsModel> logger)
+        public SettingsModel(
+            IOptionsSnapshot<LoxoneHueBridgeConfig> config, 
+            IConfiguration configuration, 
+            IConfigurationUpdateService configUpdateService,
+            ILogger<SettingsModel> logger)
         {
             _config = config;
             _configuration = configuration;
+            _configUpdateService = configUpdateService;
             _logger = logger;
         }
 
@@ -58,25 +65,33 @@ namespace LoxoneHueBridge.Web.Pages
             return Page();
         }
 
-        public async Task<IActionResult> OnPostUpdateHueAsync(bool autoDiscover, string? manualIpAddress, string applicationName, string deviceName)
+        public async Task<IActionResult> OnPostUpdateHueAsync(string applicationName, string deviceName)
         {
             try
             {
-                // Update configuration
-                _configuration[$"LoxoneHueBridge:HueBridge:AutoDiscover"] = autoDiscover.ToString();
-                _configuration[$"LoxoneHueBridge:HueBridge:ManualIpAddress"] = manualIpAddress ?? "";
+                // Validate input
+                if (string.IsNullOrWhiteSpace(applicationName) || string.IsNullOrWhiteSpace(deviceName))
+                {
+                    ErrorMessage = "Application name and device name are required.";
+                    Settings = _config.Value;
+                    LoadSystemInformation();
+                    return Page();
+                }
+
+                // Update only the application identity settings
+                // Note: Bridge IP and pairing are managed through the pairing page
                 _configuration[$"LoxoneHueBridge:HueBridge:ApplicationName"] = applicationName;
                 _configuration[$"LoxoneHueBridge:HueBridge:DeviceName"] = deviceName;
 
-                SuccessMessage = "Hue settings updated successfully.";
+                SuccessMessage = "Application identity settings updated successfully.";
                 
-                _logger.LogInformation("Hue settings updated: AutoDiscover={AutoDiscover}, ManualIp={ManualIp}, AppName={AppName}", 
-                    autoDiscover, manualIpAddress, applicationName);
+                _logger.LogInformation("Hue identity settings updated: AppName={AppName}, DeviceName={DeviceName}", 
+                    applicationName, deviceName);
             }
             catch (Exception ex)
             {
                 ErrorMessage = $"Error updating Hue settings: {ex.Message}";
-                _logger.LogError(ex, "Error updating Hue settings");
+                _logger.LogError(ex, "Error updating Hue identity settings");
             }
 
             Settings = _config.Value;

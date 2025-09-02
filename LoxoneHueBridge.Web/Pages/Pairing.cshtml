@@ -49,6 +49,30 @@
                         </div>
                     </div>
                 }
+                else if (Model.BridgeStatus?.IpAddress != null && !Model.BridgeStatus.IsPaired)
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <h5 class="alert-heading">Bridge Discovered - Ready to Pair!</h5>
+                        <p>A Hue Bridge has been discovered but is not yet paired with this application.</p>
+                        <p class="mb-0">
+                            <strong>Bridge IP:</strong> @Model.BridgeStatus.IpAddress<br>
+                            <strong>Bridge ID:</strong> @Model.BridgeStatus.BridgeId
+                        </p>
+                    </div>
+
+                    <div class="pairing-instructions bg-light p-3 rounded mb-3">
+                        <h6><i class="fas fa-hand-point-up"></i> Press the Bridge Button</h6>
+                        <p class="mb-2">Press and release the button on top of your Hue Bridge. The LED will turn blue.</p>
+                        <p class="mb-0 text-muted">You have 30 seconds to complete the pairing process.</p>
+                    </div>
+
+                    <form method="post" asp-page-handler="Pair">
+                        <input type="hidden" name="bridgeIp" value="@Model.BridgeStatus.IpAddress" />
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-link"></i> Pair with Bridge
+                        </button>
+                    </form>
+                }
                 else
                 {
                     <div class="pairing-steps">
