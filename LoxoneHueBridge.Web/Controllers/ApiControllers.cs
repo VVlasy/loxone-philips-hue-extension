@@ -40,10 +40,15 @@ public class StatusController : ControllerBase
             },
             HueBridge = new
             {
-                IsConnected = _hueService.IsConnected,
-                BridgeIp = _hueService.BridgeIp,
+                IsConnected = _hueService.BridgeStatus?.IsConnected ?? false,
+                IsPaired = _hueService.BridgeStatus?.IsPaired ?? false,
+                BridgeIp = _hueService.BridgeStatus?.IpAddress,
+                BridgeId = _hueService.BridgeStatus?.BridgeId,
                 LightsCount = lights.Count(),
-                Status = _hueService.IsConnected ? "Connected" : "Not Paired"
+                Status = _hueService.BridgeStatus == null ? "Not Discovered" :
+                         _hueService.BridgeStatus.IsConnected && _hueService.BridgeStatus.IsPaired ? "Connected" : 
+                         _hueService.BridgeStatus.IsPaired ? "Paired (Offline)" : 
+                         !string.IsNullOrEmpty(_hueService.BridgeStatus.IpAddress) ? "Discovered (Not Paired)" : "Bridge Found (No IP)"
             },
             Mappings = new
             {
@@ -78,7 +83,7 @@ public class StatusController : ControllerBase
         return Ok(new
         {
             IsConnected = isConnected,
-            BridgeIp = _hueService.BridgeIp,
+            BridgeIp = _hueService.BridgeStatus?.IpAddress,
             LightsCount = lights.Count(),
             Status = isConnected ? "Connected" : "Not Paired"
         });
@@ -102,7 +107,7 @@ public class HueController : ControllerBase
     public async Task<IActionResult> DiscoverBridge()
     {
         var discovered = await _hueService.DiscoverBridgeAsync();
-        return Ok(new { Success = discovered, BridgeIp = _hueService.BridgeIp });
+        return Ok(new { Success = discovered, BridgeIp = _hueService.BridgeStatus?.IpAddress });
     }
 
     [HttpPost("pair")]
