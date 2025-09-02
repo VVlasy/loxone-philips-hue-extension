@@ -1,0 +1,181 @@
+@page
+@model LoxoneHueBridge.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "LoxoneHueBridge Dashboard";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-4">LoxoneHueBridge Dashboard</h1>
+            <p class="lead">Control your Philips Hue lights via Loxone NAT protocol</p>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-network-wired"></i> CAN Bus Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Connection Status:</span>
+                        <span class="badge bg-success" id="can-status">Connected (Mock Mode)</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Interface:</span>
+                        <code id="can-interface">can0 (mock)</code>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Frames Received:</span>
+                        <span id="can-frame-count">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-lightbulb"></i> Hue Bridge Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Connection Status:</span>
+                        <span class="badge bg-warning" id="hue-status">Not Paired</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Bridge IP:</span>
+                        <code id="hue-ip">Discovering...</code>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Lights Count:</span>
+                        <span id="hue-light-count">0</span>
+                    </div>
+                    <div class="mt-3">
+                        <a href="/pairing" class="btn btn-primary">Pair Bridge</a>
+                        <button class="btn btn-outline-secondary" onclick="refreshHueStatus()">Refresh</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> Device Mappings
+                    </h5>
+                    <a href="/mappings" class="btn btn-sm btn-outline-primary">Manage Mappings</a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>NAT Device ID</th>
+                                    <th>Hue Target</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappings-table">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Loading mappings...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Recent Events
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">Clear</button>
+                </div>
+                <div class="card-body">
+                    <div id="events-log" style="height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em; background-color: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                        <div class="text-muted">Waiting for events...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/signalr/dist/browser/signalr.js"></script>
+    <script>
+        // SignalR connection for real-time updates
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/loggingHub")
+            .build();
+
+        connection.start().then(function () {
+            console.log("SignalR connected");
+            connection.invoke("JoinGroup", "dashboard");
+        }).catch(function (err) {
+            console.error("SignalR connection failed: " + err.toString());
+        });
+
+        connection.on("LogEvent", function (message) {
+            addLogEntry(message);
+        });
+
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('events-log');
+            const entry = document.createElement('div');
+            entry.innerHTML = `<span class="text-muted">[${new Date().toLocaleTimeString()}]</span> ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('events-log').innerHTML = '<div class="text-muted">Logs cleared.</div>';
+        }
+
+        function refreshHueStatus() {
+            // Implement status refresh
+            addLogEntry("Refreshing Hue Bridge status...");
+        }
+
+        // Initial status updates
+        setTimeout(() => {
+            addLogEntry("LoxoneHueBridge dashboard loaded");
+            addLogEntry("CAN listener running in mock mode");
+            addLogEntry("Hue Bridge discovery in progress...");
+        }, 1000);
+    </script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        
+        .badge {
+            font-size: 0.8em;
+        }
+        
+        code {
+            font-size: 0.9em;
+        }
+    </style>
+}

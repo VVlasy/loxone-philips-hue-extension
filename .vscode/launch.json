@@ -1,0 +1,69 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch LoxoneHueBridge.Web",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LoxoneHueBridge.Web/bin/Debug/net9.0/LoxoneHueBridge.Web.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/LoxoneHueBridge.Web",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "Now listening on: (https?://[^\\s{}]+)",
+                "uriFormat": "%s"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Launch LoxoneHueBridge.Web (HTTPS)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LoxoneHueBridge.Web/bin/Debug/net9.0/LoxoneHueBridge.Web.dll",
+            "args": ["--urls", "https://localhost:7149;http://localhost:5070"],
+            "cwd": "${workspaceFolder}/LoxoneHueBridge.Web",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Launch LoxoneHueBridge.Web (HTTP Only)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/LoxoneHueBridge.Web/bin/Debug/net9.0/LoxoneHueBridge.Web.dll",
+            "args": ["--urls", "http://localhost:5070"],
+            "cwd": "${workspaceFolder}/LoxoneHueBridge.Web",
+            "console": "integratedTerminal",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "Attach to Process",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}
