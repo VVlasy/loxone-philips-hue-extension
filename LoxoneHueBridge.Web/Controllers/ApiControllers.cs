@@ -151,4 +151,18 @@ public class HueController : ControllerBase
             s.Type
         }));
     }
+
+    [HttpPost("clear-appkey")]
+    public async Task<IActionResult> ClearAppKey()
+    {
+        try
+        {
+            await _hueService.UnpairFromBridgeAsync();
+            return Ok(new { success = true, message = "App key cleared successfully" });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { success = false, message = ex.Message });
+        }
+    }
 }

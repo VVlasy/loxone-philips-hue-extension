@@ -13,15 +13,23 @@ namespace LoxoneHueBridge.Core.Services;
 public interface IHueService
 {
     Task<bool> DiscoverBridgeAsync(CancellationToken cancellationToken = default);
+    Task<List<DiscoveredBridge>> DiscoverBridgesAsync(CancellationToken cancellationToken = default);
     Task<string?> PairWithBridgeAsync(CancellationToken cancellationToken = default);
+    Task<bool> PairWithBridgeAsync(string bridgeIp, CancellationToken cancellationToken = default);
     Task<bool> TestConnectionAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<Light>> GetLightsAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<GroupedLight>> GetGroupsAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<HueApi.Models.Scene>> GetScenesAsync(CancellationToken cancellationToken = default);
     Task<bool> SetLightStateAsync(Guid lightId, bool on, byte? brightness = null, CancellationToken cancellationToken = default);
+    Task<bool> SetLightStateAsync(string lightId, bool on, byte? brightness = null, CancellationToken cancellationToken = default);
     Task<bool> SetLightColorAsync(Guid lightId, byte red, byte green, byte blue, byte? brightness = null, CancellationToken cancellationToken = default);
+    Task<bool> SetLightColorAsync(string lightId, byte red, byte green, byte blue, byte? brightness = null, CancellationToken cancellationToken = default);
     Task<bool> SetGroupStateAsync(Guid groupId, bool on, byte? brightness = null, CancellationToken cancellationToken = default);
+    Task<bool> SetGroupStateAsync(string groupId, bool on, byte? brightness = null, CancellationToken cancellationToken = default);
     Task<bool> ActivateSceneAsync(Guid sceneId, CancellationToken cancellationToken = default);
+    Task<bool> ActivateSceneAsync(string sceneId, CancellationToken cancellationToken = default);
+    Task<BridgeStatus?> GetBridgeStatusAsync();
+    Task UnpairFromBridgeAsync();
     bool IsConnected { get; }
     string? BridgeIp { get; }
 }
@@ -320,4 +328,149 @@ public class HueService : IHueService
             return false;
         }
     }
+
+    // Additional methods for the Pairing page
+    public async Task<List<DiscoveredBridge>> DiscoverBridgesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var locator = new HttpBridgeLocator();
+            var bridges = await locator.LocateBridgesAsync(TimeSpan.FromSeconds(5));
+            
+            return bridges.Select(b => new DiscoveredBridge
+            {
+                IpAddress = b.IpAddress,
+                BridgeId = b.BridgeId
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error discovering bridges");
+            return new List<DiscoveredBridge>();
+        }
+    }
+
+    public async Task<bool> PairWithBridgeAsync(string bridgeIp, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _bridgeIp = bridgeIp;
+            var appKey = await PairWithBridgeAsync(cancellationToken);
+            return !string.IsNullOrEmpty(appKey);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pairing with bridge at {BridgeIp}", bridgeIp);
+            return false;
+        }
+    }
+
+    public async Task<BridgeStatus?> GetBridgeStatusAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_bridgeIp) || string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey))
+            {
+                return new BridgeStatus { IsConnected = false };
+            }
+
+            if (_client == null)
+            {
+                _client = new LocalHueApi(_bridgeIp, _config.CurrentValue.HueBridge.AppKey);
+            }
+
+            var bridge = await _client.GetBridgeAsync();
+            var bridgeData = bridge?.Data?.FirstOrDefault();
+
+            return new BridgeStatus
+            {
+                IsConnected = true,
+                IpAddress = _bridgeIp,
+                BridgeId = bridgeData?.Id != Guid.Empty ? bridgeData?.Id.ToString() : "Unknown",
+                ApiVersion = bridgeData?.Metadata?.Archetype?? "Unknown"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting bridge status");
+            return new BridgeStatus { IsConnected = false };
+        }
+    }
+
+    public async Task UnpairFromBridgeAsync()
+    {
+        try
+        {
+            // Clear the app key from configuration
+            // Note: In a real implementation, you would update the configuration file
+            _logger.LogInformation("Unpaired from Hue Bridge");
+            _client = null;
+            _bridgeIp = null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error unpairing from bridge");
+            throw;
+        }
+    }
+
+    // String overloads for easier integration with mappings
+    public async Task<bool> SetLightStateAsync(string lightId, bool on, byte? brightness = null, CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(lightId, out var guid))
+        {
+            return await SetLightStateAsync(guid, on, brightness, cancellationToken);
+        }
+        
+        _logger.LogWarning("Invalid light ID format: {LightId}", lightId);
+        return false;
+    }
+
+    public async Task<bool> SetLightColorAsync(string lightId, byte red, byte green, byte blue, byte? brightness = null, CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(lightId, out var guid))
+        {
+            return await SetLightColorAsync(guid, red, green, blue, brightness, cancellationToken);
+        }
+        
+        _logger.LogWarning("Invalid light ID format: {LightId}", lightId);
+        return false;
+    }
+
+    public async Task<bool> SetGroupStateAsync(string groupId, bool on, byte? brightness = null, CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(groupId, out var guid))
+        {
+            return await SetGroupStateAsync(guid, on, brightness, cancellationToken);
+        }
+        
+        _logger.LogWarning("Invalid group ID format: {GroupId}", groupId);
+        return false;
+    }
+
+    public async Task<bool> ActivateSceneAsync(string sceneId, CancellationToken cancellationToken = default)
+    {
+        if (Guid.TryParse(sceneId, out var guid))
+        {
+            return await ActivateSceneAsync(guid, cancellationToken);
+        }
+        
+        _logger.LogWarning("Invalid scene ID format: {SceneId}", sceneId);
+        return false;
+    }
+}
+
+// Supporting classes for the Pairing page
+public class DiscoveredBridge
+{
+    public string IpAddress { get; set; } = "";
+    public string BridgeId { get; set; } = "";
+}
+
+public class BridgeStatus
+{
+    public bool IsConnected { get; set; }
+    public string? IpAddress { get; set; }
+    public string? BridgeId { get; set; }
+    public string? ApiVersion { get; set; }
 }

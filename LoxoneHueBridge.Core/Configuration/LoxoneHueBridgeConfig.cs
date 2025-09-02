@@ -7,6 +7,11 @@ public class LoxoneHueBridgeConfig
     public bool MockMode { get; set; } = false;
     public HueBridgeConfig HueBridge { get; set; } = new();
     public MappingsConfig Mappings { get; set; } = new();
+    
+    // Logging configuration
+    public string LogLevel { get; set; } = "Information";
+    public int LogRetentionDays { get; set; } = 30;
+    public bool EnableFileLogging { get; set; } = true;
 }
 
 public class HueBridgeConfig

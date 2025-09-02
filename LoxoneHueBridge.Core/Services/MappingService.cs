@@ -9,9 +9,13 @@ public interface IMappingService
     Task LoadMappingsAsync(string filePath, CancellationToken cancellationToken = default);
     Task SaveMappingsAsync(string filePath, CancellationToken cancellationToken = default);
     void AddMapping(HueMapping mapping);
+    Task AddMappingAsync(HueMapping mapping);
     void RemoveMapping(uint natDeviceId);
+    Task RemoveMappingAsync(uint natDeviceId);
     HueMapping? GetMapping(uint natDeviceId);
+    Task<HueMapping?> GetMappingAsync(uint natDeviceId);
     IEnumerable<HueMapping> GetAllMappings();
+    Task<List<HueMapping>> GetAllMappingsAsync();
     void ClearMappings();
 }
 
@@ -137,6 +141,35 @@ public class MappingService : IMappingService
         }
         
         _logger.LogInformation("Cleared all mappings");
+    }
+
+    // Additional async methods for consistency
+    public async Task AddMappingAsync(HueMapping mapping)
+    {
+        await Task.CompletedTask; // Make async for consistency
+        AddMapping(mapping);
+    }
+
+    public async Task RemoveMappingAsync(uint natDeviceId)
+    {
+        await Task.CompletedTask; // Make async for consistency
+        RemoveMapping(natDeviceId);
+    }
+
+    public async Task<HueMapping?> GetMappingAsync(uint natDeviceId)
+    {
+        await Task.CompletedTask; // Make async for consistency
+        return GetMapping(natDeviceId);
+    }
+
+    public async Task<List<HueMapping>> GetAllMappingsAsync()
+    {
+        await Task.CompletedTask; // Make async for consistency
+        
+        lock (_lock)
+        {
+            return _mappings.Values.ToList();
+        }
     }
 }
 
