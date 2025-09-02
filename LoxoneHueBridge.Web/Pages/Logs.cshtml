@@ -1,0 +1,353 @@
+@page
+@model LoxoneHueBridge.Web.Pages.LogsModel
+@{
+    ViewData["Title"] = "Live Logs";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="fas fa-list-alt"></i> Live System Logs
+                </h4>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleAutoScroll()">
+                        <i class="fas fa-arrow-down" id="autoScrollIcon"></i>
+                        <span id="autoScrollText">Auto-scroll On</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearLogs()">
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="downloadLogs()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Log Level Filter -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="logLevelFilter" class="form-label">Filter by Level:</label>
+                        <select class="form-select form-select-sm" id="logLevelFilter" onchange="filterLogs()">
+                            <option value="">All Levels</option>
+                            <option value="Critical">Critical</option>
+                            <option value="Error">Error</option>
+                            <option value="Warning">Warning</option>
+                            <option value="Information">Information</option>
+                            <option value="Debug">Debug</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="componentFilter" class="form-label">Filter by Component:</label>
+                        <select class="form-select form-select-sm" id="componentFilter" onchange="filterLogs()">
+                            <option value="">All Components</option>
+                            <option value="CAN">CAN Bus</option>
+                            <option value="NAT">NAT Parser</option>
+                            <option value="Hue">Hue Service</option>
+                            <option value="Mapping">Mapping Service</option>
+                            <option value="Web">Web Interface</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title" id="canFrameCount">0</h5>
+                                <p class="card-text small">CAN Frames</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title" id="hueCommandCount">0</h5>
+                                <p class="card-text small">Hue Commands</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title" id="errorCount">0</h5>
+                                <p class="card-text small">Errors</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title" id="totalLogCount">0</h5>
+                                <p class="card-text small">Total Logs</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log Display -->
+                <div class="log-container" style="height: 500px; overflow-y: auto; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                    <div id="logDisplay" class="p-3" style="font-family: 'Courier New', monospace; font-size: 0.875rem;">
+                        <div class="text-muted text-center">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Connecting to live log stream...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.0/signalr.min.js"></script>
+    <script>
+        let connection;
+        let autoScroll = true;
+        let logs = [];
+        let canFrameCount = 0;
+        let hueCommandCount = 0;
+        let errorCount = 0;
+
+        // Initialize SignalR connection
+        async function initializeConnection() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/loggingHub")
+                .withAutomaticReconnect()
+                .build();
+
+            connection.on("LogEvent", function (logEntry) {
+                addLogEntry(logEntry);
+                updateStatistics(logEntry);
+            });
+
+            connection.onreconnecting(() => {
+                const logDisplay = document.getElementById('logDisplay');
+                logDisplay.innerHTML += '<div class="text-warning"><i class="fas fa-exclamation-triangle"></i> Connection lost, attempting to reconnect...</div>';
+            });
+
+            connection.onreconnected(() => {
+                const logDisplay = document.getElementById('logDisplay');
+                logDisplay.innerHTML += '<div class="text-success"><i class="fas fa-check-circle"></i> Reconnected to log stream</div>';
+                scrollToBottom();
+            });
+
+            try {
+                await connection.start();
+                await connection.invoke("JoinGroup", "Logs");
+                
+                const logDisplay = document.getElementById('logDisplay');
+                logDisplay.innerHTML = '<div class="text-success"><i class="fas fa-check-circle"></i> Connected to live log stream</div>';
+                
+                // Load recent logs
+                await loadRecentLogs();
+            } catch (err) {
+                console.error('SignalR connection error:', err);
+                const logDisplay = document.getElementById('logDisplay');
+                logDisplay.innerHTML = '<div class="text-danger"><i class="fas fa-times-circle"></i> Failed to connect to log stream</div>';
+            }
+        }
+
+        // Add a new log entry
+        function addLogEntry(logEntry) {
+            logs.push(logEntry);
+            
+            // Keep only last 1000 logs in memory
+            if (logs.length > 1000) {
+                logs = logs.slice(-1000);
+            }
+            
+            renderLogs();
+        }
+
+        // Render logs with current filters
+        function renderLogs() {
+            const logDisplay = document.getElementById('logDisplay');
+            const levelFilter = document.getElementById('logLevelFilter').value;
+            const componentFilter = document.getElementById('componentFilter').value;
+            
+            let filteredLogs = logs;
+            
+            if (levelFilter) {
+                filteredLogs = filteredLogs.filter(log => log.level === levelFilter);
+            }
+            
+            if (componentFilter) {
+                filteredLogs = filteredLogs.filter(log => log.category.includes(componentFilter));
+            }
+            
+            let html = '';
+            filteredLogs.forEach(log => {
+                const levelClass = getLevelClass(log.level);
+                const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                const icon = getLevelIcon(log.level);
+                
+                html += `
+                    <div class="log-entry mb-1 ${levelClass}" data-level="${log.level}" data-category="${log.category}">
+                        <span class="text-muted">[${timestamp}]</span>
+                        <span class="badge bg-secondary me-1">${log.category}</span>
+                        <i class="${icon} me-1"></i>
+                        <span class="fw-bold">${log.level}:</span>
+                        <span>${escapeHtml(log.message)}</span>
+                        ${log.exception ? `<div class="text-danger mt-1 ms-4"><small>${escapeHtml(log.exception)}</small></div>` : ''}
+                    </div>
+                `;
+            });
+            
+            if (filteredLogs.length === 0) {
+                html = '<div class="text-muted text-center"><i class="fas fa-info-circle"></i> No logs match the current filter</div>';
+            }
+            
+            logDisplay.innerHTML = html;
+            
+            if (autoScroll) {
+                scrollToBottom();
+            }
+            
+            // Update total count
+            document.getElementById('totalLogCount').textContent = logs.length;
+        }
+
+        // Update statistics
+        function updateStatistics(logEntry) {
+            if (logEntry.category.includes('CAN') || logEntry.message.includes('CAN frame')) {
+                canFrameCount++;
+                document.getElementById('canFrameCount').textContent = canFrameCount;
+            }
+            
+            if (logEntry.category.includes('Hue') || logEntry.message.includes('Hue')) {
+                hueCommandCount++;
+                document.getElementById('hueCommandCount').textContent = hueCommandCount;
+            }
+            
+            if (logEntry.level === 'Error' || logEntry.level === 'Critical') {
+                errorCount++;
+                document.getElementById('errorCount').textContent = errorCount;
+            }
+        }
+
+        // Get CSS class for log level
+        function getLevelClass(level) {
+            switch (level) {
+                case 'Critical': return 'text-danger fw-bold';
+                case 'Error': return 'text-danger';
+                case 'Warning': return 'text-warning';
+                case 'Information': return 'text-info';
+                case 'Debug': return 'text-muted';
+                default: return '';
+            }
+        }
+
+        // Get icon for log level
+        function getLevelIcon(level) {
+            switch (level) {
+                case 'Critical': return 'fas fa-skull';
+                case 'Error': return 'fas fa-times-circle';
+                case 'Warning': return 'fas fa-exclamation-triangle';
+                case 'Information': return 'fas fa-info-circle';
+                case 'Debug': return 'fas fa-bug';
+                default: return 'fas fa-circle';
+            }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Scroll to bottom
+        function scrollToBottom() {
+            const container = document.querySelector('.log-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Toggle auto-scroll
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const icon = document.getElementById('autoScrollIcon');
+            const text = document.getElementById('autoScrollText');
+            
+            if (autoScroll) {
+                icon.className = 'fas fa-arrow-down';
+                text.textContent = 'Auto-scroll On';
+                scrollToBottom();
+            } else {
+                icon.className = 'fas fa-pause';
+                text.textContent = 'Auto-scroll Off';
+            }
+        }
+
+        // Clear logs
+        function clearLogs() {
+            if (confirm('Are you sure you want to clear all logs?')) {
+                logs = [];
+                canFrameCount = 0;
+                hueCommandCount = 0;
+                errorCount = 0;
+                
+                document.getElementById('canFrameCount').textContent = '0';
+                document.getElementById('hueCommandCount').textContent = '0';
+                document.getElementById('errorCount').textContent = '0';
+                document.getElementById('totalLogCount').textContent = '0';
+                
+                renderLogs();
+            }
+        }
+
+        // Download logs
+        function downloadLogs() {
+            const logText = logs.map(log => {
+                const timestamp = new Date(log.timestamp).toISOString();
+                return `[${timestamp}] [${log.category}] ${log.level}: ${log.message}${log.exception ? '\n  Exception: ' + log.exception : ''}`;
+            }).join('\n');
+            
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `loxone-hue-bridge-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Filter logs
+        function filterLogs() {
+            renderLogs();
+        }
+
+        // Load recent logs
+        async function loadRecentLogs() {
+            try {
+                const response = await fetch('/api/logs/recent');
+                if (response.ok) {
+                    const recentLogs = await response.json();
+                    logs = recentLogs;
+                    renderLogs();
+                    
+                    // Update statistics
+                    recentLogs.forEach(log => updateStatistics(log));
+                }
+            } catch (error) {
+                console.error('Error loading recent logs:', error);
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeConnection();
+        });
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && connection.state === 'Disconnected') {
+                initializeConnection();
+            }
+        });
+    </script>
+}

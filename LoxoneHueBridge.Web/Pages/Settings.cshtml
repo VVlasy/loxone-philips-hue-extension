@@ -1,0 +1,381 @@
+@page
+@model LoxoneHueBridge.Web.Pages.SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                @Model.ErrorMessage
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+        {
+            <div class="alert alert-success" role="alert">
+                <i class="fas fa-check-circle"></i>
+                @Model.SuccessMessage
+            </div>
+        }
+
+        <!-- CAN Bus Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-network-wired"></i> CAN Bus Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" asp-page-handler="UpdateCan">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="canInterface" class="form-label">CAN Interface</label>
+                                <input type="text" class="form-control" id="canInterface" name="canInterface" 
+                                       value="@Model.Settings.CanInterface" required>
+                                <div class="form-text">Linux: can0, can1, etc. Windows: mock mode only</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="canBitrate" class="form-label">Bitrate (bps)</label>
+                                <select class="form-select" id="canBitrate" name="canBitrate">
+                                    <option value="125000" selected="@(Model.Settings.CanBitrate == 125000)">125000 (Standard)</option>
+                                    <option value="250000" selected="@(Model.Settings.CanBitrate == 250000)">250000</option>
+                                    <option value="500000" selected="@(Model.Settings.CanBitrate == 500000)">500000</option>
+                                    <option value="1000000" selected="@(Model.Settings.CanBitrate == 1000000)">1000000</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="mockMode" name="mockMode" 
+                                   @(Model.Settings.MockMode ? "checked" : "")>
+                            <label class="form-check-label" for="mockMode">
+                                Mock Mode (Generate test CAN frames)
+                            </label>
+                            <div class="form-text">Enable this for testing without real CAN hardware</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update CAN Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Hue Bridge Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb"></i> Hue Bridge Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.Settings.HueBridge.AppKey) && !string.IsNullOrEmpty(Model.Settings.HueBridge.ManualIpAddress))
+                {
+                    <div class="alert alert-success" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-check-circle"></i> Bridge Paired
+                        </h6>
+                        <p class="mb-2">Your Hue Bridge is successfully paired and configured.</p>
+                        <p class="mb-0">
+                            <strong>Bridge IP:</strong> @Model.Settings.HueBridge.ManualIpAddress<br>
+                            <strong>Status:</strong> <span class="badge bg-success">Connected</span>
+                        </p>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <a href="/pairing" class="btn btn-outline-primary">
+                            <i class="fas fa-cog"></i> Manage Pairing
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" onclick="confirmUnpair()">
+                            <i class="fas fa-unlink"></i> Unpair Bridge
+                        </button>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(Model.Settings.HueBridge.AppKey))
+                {
+                    <div class="alert alert-warning" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-exclamation-triangle"></i> Bridge Paired but IP Unknown
+                        </h6>
+                        <p class="mb-2">You have pairing credentials but the bridge IP needs to be rediscovered.</p>
+                        <p class="mb-0">This can happen if the bridge IP address changed.</p>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <a href="/pairing" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Rediscover Bridge
+                        </a>
+                        <button type="button" class="btn btn-outline-danger" onclick="confirmUnpair()">
+                            <i class="fas fa-unlink"></i> Clear Pairing
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-info" role="alert">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle"></i> No Bridge Paired
+                        </h6>
+                        <p class="mb-2">You need to pair with a Hue Bridge to control your lights.</p>
+                        <p class="mb-0">Use the pairing page to discover and connect to your bridge.</p>
+                    </div>
+                    
+                    <a href="/pairing" class="btn btn-primary">
+                        <i class="fas fa-link"></i> Go to Pairing
+                    </a>
+                }
+
+                <hr class="my-4">
+
+                <form method="post" asp-page-handler="UpdateHue">
+                    <h6 class="mb-3">Application Identity</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="applicationName" class="form-label">Application Name</label>
+                                <input type="text" class="form-control" id="applicationName" name="applicationName" 
+                                       value="@Model.Settings.HueBridge.ApplicationName" required>
+                                <div class="form-text">Name shown to Hue Bridge for this application</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="deviceName" class="form-label">Device Name</label>
+                                <input type="text" class="form-control" id="deviceName" name="deviceName" 
+                                       value="@Model.Settings.HueBridge.DeviceName" required>
+                                <div class="form-text">Device name shown in Hue app</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-save"></i> Update Identity Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Logging Settings -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-alt"></i> Logging Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" asp-page-handler="UpdateLogging">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logLevel" class="form-label">Minimum Log Level</label>
+                                <select class="form-select" id="logLevel" name="logLevel">
+                                    <option value="Debug" selected="@(Model.Settings.LogLevel == "Debug")">Debug (Verbose)</option>
+                                    <option value="Information" selected="@(Model.Settings.LogLevel == "Information")">Information (Default)</option>
+                                    <option value="Warning" selected="@(Model.Settings.LogLevel == "Warning")">Warning</option>
+                                    <option value="Error" selected="@(Model.Settings.LogLevel == "Error")">Error</option>
+                                    <option value="Critical" selected="@(Model.Settings.LogLevel == "Critical")">Critical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="logRetentionDays" class="form-label">Log Retention (Days)</label>
+                                <input type="number" class="form-control" id="logRetentionDays" name="logRetentionDays" 
+                                       value="@Model.Settings.LogRetentionDays" min="1" max="365">
+                                <div class="form-text">How long to keep log files</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enableFileLogging" name="enableFileLogging" 
+                                   @(Model.Settings.EnableFileLogging ? "checked" : "")>
+                            <label class="form-check-label" for="enableFileLogging">
+                                Enable File Logging
+                            </label>
+                            <div class="form-text">Save logs to files in addition to console output</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Update Logging Settings
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- System Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs"></i> System Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <button type="button" class="btn btn-warning w-100" onclick="restartServices()">
+                            <i class="fas fa-redo"></i><br>
+                            Restart Services
+                        </button>
+                        <div class="form-text text-center mt-1">Restart CAN and Hue services</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button type="button" class="btn btn-info w-100" onclick="exportConfig()">
+                            <i class="fas fa-download"></i><br>
+                            Export Config
+                        </button>
+                        <div class="form-text text-center mt-1">Download configuration backup</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="importConfig" class="btn btn-success w-100 m-0">
+                            <i class="fas fa-upload"></i><br>
+                            Import Config
+                        </label>
+                        <input type="file" id="importConfig" class="d-none" accept=".json" onchange="importConfig()">
+                        <div class="form-text text-center mt-1">Upload configuration backup</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> System Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Application Version:</strong> @Model.SystemInfo.Version<br>
+                        <strong>.NET Version:</strong> @Model.SystemInfo.DotNetVersion<br>
+                        <strong>Platform:</strong> @Model.SystemInfo.Platform<br>
+                        <strong>Uptime:</strong> @Model.SystemInfo.Uptime
+                    </div>
+                    <div class="col-md-6">
+                        <strong>CAN Status:</strong> 
+                        <span class="badge bg-@(Model.SystemInfo.CanStatus == "Connected" ? "success" : "danger")">
+                            @Model.SystemInfo.CanStatus
+                        </span><br>
+                        <strong>Hue Status:</strong> 
+                        <span class="badge bg-@(Model.SystemInfo.HueStatus == "Connected" ? "success" : "danger")">
+                            @Model.SystemInfo.HueStatus
+                        </span><br>
+                        <strong>Active Mappings:</strong> @Model.SystemInfo.ActiveMappings<br>
+                        <strong>Memory Usage:</strong> @Model.SystemInfo.MemoryUsage MB
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function restartServices() {
+            if (confirm('Are you sure you want to restart all services? This may cause a brief interruption.')) {
+                fetch('/api/system/restart-services', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showAlert('Services restarted successfully', 'success');
+                        } else {
+                            showAlert('Error restarting services: ' + data.message, 'danger');
+                        }
+                    })
+                    .catch(error => {
+                        showAlert('Error restarting services: ' + error.message, 'danger');
+                    });
+            }
+        }
+
+        function exportConfig() {
+            fetch('/api/system/export-config')
+                .then(response => response.blob())
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `loxone-hue-bridge-config-${new Date().toISOString().slice(0, 10)}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    showAlert('Configuration exported successfully', 'success');
+                })
+                .catch(error => {
+                    showAlert('Error exporting configuration: ' + error.message, 'danger');
+                });
+        }
+
+        function importConfig() {
+            const fileInput = document.getElementById('importConfig');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            if (confirm('Are you sure you want to import this configuration? This will overwrite current settings.')) {
+                const formData = new FormData();
+                formData.append('configFile', file);
+                
+                fetch('/api/system/import-config', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('Configuration imported successfully. Page will reload.', 'success');
+                        setTimeout(() => window.location.reload(), 2000);
+                    } else {
+                        showAlert('Error importing configuration: ' + data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showAlert('Error importing configuration: ' + error.message, 'danger');
+                });
+            }
+            
+            // Clear the file input
+            fileInput.value = '';
+        }
+
+        function clearAppKey() {
+            confirmUnpair();
+        }
+
+        function confirmUnpair() {
+            if (confirm('Are you sure you want to unpair from the Hue Bridge? You will need to re-pair to control lights again.')) {
+                window.location.href = '/pairing';
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.col-lg-8');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+}

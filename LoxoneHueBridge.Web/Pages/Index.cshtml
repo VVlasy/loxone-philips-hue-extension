@@ -1,0 +1,334 @@
+@page
+@model LoxoneHueBridge.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "LoxonehueBridge Dashboard";
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-4">LoxonehueBridge Dashboard</h1>
+            <p class="lead">Control your Philips Hue lights via Loxone NAT protocol</p>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-network-wired"></i> CAN Bus Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Connection Status:</span>
+                        <span class="badge @(Model.CanIsRunning ? "bg-success" : "bg-danger")" id="can-status">@Model.CanStatus</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Interface:</span>
+                        <code id="can-interface">can0 (mock)</code>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Frames Received:</span>
+                        <span id="can-frame-count">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-lightbulb"></i> Hue Bridge Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Connection Status:</span>
+                        <span class="badge @(Model.HueStatus switch {
+                            "Connected" => "bg-success",
+                            "Paired (Offline)" => "bg-warning",
+                            "Discovered (Not Paired)" => "bg-info", 
+                            _ => "bg-secondary"
+                        })" id="hue-status">@Model.HueStatus</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Bridge IP:</span>
+                        <code id="hue-ip">@(Model.HueBridgeIp ?? "Not discovered")</code>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span>Lights Count:</span>
+                        <span id="hue-light-count">0</span>
+                    </div>
+                    <div class="mt-3">
+                        <a href="/pairing" class="btn btn-primary">Pair Bridge</a>
+                        <button class="btn btn-outline-secondary" onclick="refreshHueStatus()">Refresh</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt"></i> Device Mappings
+                    </h5>
+                    <a href="/mappings" class="btn btn-sm btn-outline-primary">Manage Mappings</a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Extension/Device</th>
+                                    <th>Hue Target</th>
+                                    <th>Target Type</th>
+                                    <th>Mapping Type</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mappings-table">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Loading mappings...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Recent Events
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">Clear</button>
+                </div>
+                <div class="card-body">
+                    <div id="events-log" style="height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em; background-color: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                        <div class="text-muted">Waiting for events...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+    <script>
+        // Utility functions
+        function addLogEntry(logData) {
+            const logContainer = document.getElementById('events-log');
+            const entry = document.createElement('div');
+            
+            // Handle both string messages (legacy) and log objects
+            if (typeof logData === 'string') {
+                entry.innerHTML = `<span class="text-muted">[${new Date().toLocaleTimeString()}]</span> ${logData}`;
+            } else {
+                const timestamp = new Date(logData.timestamp || Date.now()).toLocaleTimeString();
+                const levelClass = getLogLevelClass(logData.level || 'Information');
+                entry.innerHTML = `<span class="text-muted">[${timestamp}]</span> <span class="${levelClass}">[${logData.level || 'INFO'}]</span> ${logData.message}`;
+            }
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only the last 50 entries to prevent memory issues
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+
+        function getLogLevelClass(level) {
+            switch (level) {
+                case 'Error': return 'text-danger';
+                case 'Warning': return 'text-warning';
+                case 'Information': return 'text-info';
+                case 'Debug': return 'text-secondary';
+                default: return 'text-muted';
+            }
+        }
+
+        function clearLogs() {
+            // Clear the display immediately
+            document.getElementById('events-log').innerHTML = '<div class="text-muted">Logs cleared.</div>';
+            
+            // Also clear the server-side logs
+            fetch('/api/logs/clear', { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Server logs cleared');
+                    } else {
+                        console.error('Failed to clear server logs');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error clearing server logs:', error);
+                });
+        }
+
+        function refreshHueStatus() {
+            loadDashboardData();
+        }
+
+        // Check if SignalR is loaded, if not disable real-time features
+        if (typeof signalR !== 'undefined') {
+            // SignalR connection for real-time updates
+            const connection = new signalR.HubConnectionBuilder()
+                .withUrl("/loggingHub")
+                .build();
+
+            connection.start().then(function () {
+                console.log("SignalR connected");
+                connection.invoke("JoinGroup", "Logs");
+            }).catch(function (err) {
+                console.error("SignalR connection failed: " + err.toString());
+                addLogEntry("Warning: Real-time updates unavailable - " + err.toString());
+            });
+
+            connection.on("LogEvent", function (logData) {
+                addLogEntry(logData);
+            });
+        } else {
+            console.warn("SignalR not available, real-time features disabled");
+            addLogEntry("Warning: SignalR not loaded - real-time updates disabled");
+        }
+
+        let isLoadingData = false;
+        
+        async function loadDashboardData() {
+            if (isLoadingData) return; // Prevent concurrent calls
+            isLoadingData = true;
+            
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                // Update Loxone Link status
+                const canStatus = document.getElementById('can-status');
+                const canInterface = document.getElementById('can-interface');
+                const canFrameCount = document.getElementById('can-frame-count');
+                
+                canStatus.textContent = data.loxoneLink.status;
+                canStatus.className = `badge ${data.loxoneLink.isRunning ? 'bg-success' : 'bg-danger'}`;
+                canInterface.textContent = data.loxoneLink.isRunning ? 'Loxone Link Connected' : 'Loxone Link Disconnected';
+                canFrameCount.textContent = '0'; // This would need to be tracked separately
+                
+                // Update Hue Bridge status
+                const hueStatus = document.getElementById('hue-status');
+                const hueIp = document.getElementById('hue-ip');
+                const hueLightCount = document.getElementById('hue-light-count');
+                
+                hueStatus.textContent = data.hueBridge.status;
+                hueStatus.className = `badge ${getStatusBadgeClass(data.hueBridge.status)}`;
+                hueIp.textContent = data.hueBridge.bridgeIp || 'Not discovered';
+                hueLightCount.textContent = data.hueBridge.lightsCount;
+                
+                // Update mappings table
+                updateMappingsTable(data.mappings);
+                
+                console.log('Dashboard data updated:', data);
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                addLogEntry('Error: Failed to load status data');
+            } finally {
+                isLoadingData = false;
+            }
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'Connected': return 'bg-success';
+                case 'Paired (Offline)': return 'bg-warning';
+                case 'Discovered (Not Paired)': return 'bg-info';
+                case 'Not Discovered': return 'bg-secondary';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function updateMappingsTable(mappings) {
+            const tbody = document.getElementById('mappings-table');
+            
+            // Always clear the table first
+            tbody.innerHTML = '';
+            
+            if (!mappings || mappings.count === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No mappings configured</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = mappings.items.map(mapping => `
+                <tr>
+                    <td>${mapping.extensionSerial}/${mapping.deviceSerial}</td>
+                    <td>${mapping.hueTargetId}</td>
+                    <td><span class="badge bg-primary">${mapping.hueTargetType}</span></td>
+                    <td><span class="badge bg-secondary">${mapping.mappingType}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // Initial load and periodic refresh
+        document.addEventListener('DOMContentLoaded', function() {
+            addLogEntry("LoxonehueBridge dashboard loaded");
+            loadDashboardData();
+            loadRecentEvents();
+            
+            // Refresh data every 30 seconds
+            setInterval(loadDashboardData, 30000);
+        });
+
+        async function loadRecentEvents() {
+            try {
+                const response = await fetch('/api/logs/recent?count=10');
+                const logs = await response.json();
+                
+                const logContainer = document.getElementById('events-log');
+                logContainer.innerHTML = ''; // Clear the "Waiting for events..." message
+                
+                logs.forEach(log => {
+                    const entry = document.createElement('div');
+                    const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                    const levelClass = getLogLevelClass(log.level);
+                    entry.innerHTML = `<span class="text-muted">[${timestamp}]</span> <span class="${levelClass}">[${log.level}]</span> ${log.message}`;
+                    logContainer.appendChild(entry);
+                });
+                
+                if (logs.length === 0) {
+                    logContainer.innerHTML = '<div class="text-muted">No recent events</div>';
+                }
+                
+                logContainer.scrollTop = logContainer.scrollHeight;
+            } catch (error) {
+                console.error('Failed to load recent events:', error);
+                document.getElementById('events-log').innerHTML = '<div class="text-danger">Failed to load recent events</div>';
+            }
+        }
+    </script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            border: 1px solid rgba(0, 0, 0, 0.125);
+        }
+        
+        .badge {
+            font-size: 0.8em;
+        }
+        
+        code {
+            font-size: 0.9em;
+        }
+    </style>
+}
