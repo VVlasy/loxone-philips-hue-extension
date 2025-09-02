@@ -470,7 +470,9 @@ public class DiscoveredBridge
 public class BridgeStatus
 {
     public bool IsConnected { get; set; }
+    public bool IsPaired { get; set; }
     public string? IpAddress { get; set; }
     public string? BridgeId { get; set; }
     public string? ApiVersion { get; set; }
+    public string? AppKey { get; set; }
 }
