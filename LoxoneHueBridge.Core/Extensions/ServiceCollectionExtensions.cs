@@ -14,6 +14,12 @@ public static class ServiceCollectionExtensions
         services.Configure<LoxoneHueBridgeConfig>(configuration.GetSection("LoxoneHueBridge"));
 
         // Core Services
+        services.AddSingleton<ConfigurationWriter>(serviceProvider =>
+        {
+            var config = serviceProvider.GetRequiredService<IConfiguration>();
+            var environment = serviceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>();
+            return new ConfigurationWriter(config, environment);
+        });
         services.AddSingleton<INatParser, NatParser>();
         services.AddSingleton<IMappingService, MappingService>();
         services.AddSingleton<IConfigurationUpdateService, ConfigurationUpdateService>();
