@@ -215,6 +215,7 @@ public class HueService : IHueService
             {
                 _bridgeStatus.IsConnected = true;
                 _bridgeStatus.IsPaired = true;
+                _bridgeStatus.ApiVersion = "";
             }
             _logger.LogDebug("Connection test successful. Bridge name: {BridgeName}", config?.Data?.FirstOrDefault()?.Metadata?.Name);
             return true;

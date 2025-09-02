@@ -142,20 +142,9 @@ public class HueBackgroundService : BackgroundService
     private async Task InitializeHueConnectionAsync(IHueService hueService, CancellationToken cancellationToken)
     {
         var config = _config.CurrentValue.HueBridge;
-        
-        // Try to discover bridge if not manually configured
-        if (config.AutoDiscover || string.IsNullOrEmpty(config.ManualIpAddress))
-        {
-            var discovered = await hueService.DiscoverBridgeAsync(cancellationToken);
-            if (!discovered)
-            {
-                _logger.LogWarning("Failed to discover Hue Bridge. Manual configuration may be required.");
-                return;
-            }
-        }
 
         // Test existing connection if app key is configured
-        if (!string.IsNullOrEmpty(config.AppKey))
+        if (!string.IsNullOrEmpty(config.ManualIpAddress) && !string.IsNullOrEmpty(config.AppKey))
         {
             var connected = await hueService.TestConnectionAsync(cancellationToken);
             if (connected)
