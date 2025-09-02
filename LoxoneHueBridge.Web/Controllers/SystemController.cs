@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using LoxoneHueBridge.Core.Services;
+using LoxoneHueBridge.Web.Services;
 
 namespace LoxoneHueBridge.Web.Controllers
 {
@@ -87,51 +88,114 @@ namespace LoxoneHueBridge.Web.Controllers
     public class LogsController : ControllerBase
     {
         private readonly ILogger<LogsController> _logger;
+        private readonly ILogCollectorService _logCollector;
 
-        public LogsController(ILogger<LogsController> logger)
+        public LogsController(ILogger<LogsController> logger, ILogCollectorService logCollector)
         {
             _logger = logger;
+            _logCollector = logCollector;
         }
 
         [HttpGet("recent")]
-        public IActionResult GetRecentLogs()
+        public IActionResult GetRecentLogs(int count = 100)
         {
             try
             {
-                // Placeholder implementation - return sample log entries
-                var sampleLogs = new[]
-                {
-                    new
-                    {
-                        timestamp = DateTime.UtcNow.AddMinutes(-5),
-                        level = "Information",
-                        category = "LoxoneHueBridge.Core.Services.CanListenerService",
-                        message = "CAN service started in mock mode",
-                        exception = (string?)null
-                    },
-                    new
-                    {
-                        timestamp = DateTime.UtcNow.AddMinutes(-3),
-                        level = "Information",
-                        category = "LoxoneHueBridge.Core.Services.HueService",
-                        message = "Hue Bridge discovered at 192.168.1.100",
-                        exception = (string?)null
-                    },
-                    new
-                    {
-                        timestamp = DateTime.UtcNow.AddMinutes(-1),
-                        level = "Debug",
-                        category = "LoxoneHueBridge.Core.Services.NatParser",
-                        message = "Processed NAT frame: Device 1, Command 0x80",
-                        exception = (string?)null
-                    }
-                };
-
-                return Ok(sampleLogs);
+                var recentLogs = _logCollector.GetRecentLogs(count);
+                return Ok(recentLogs);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving recent logs");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("statistics")]
+        public IActionResult GetStatistics()
+        {
+            try
+            {
+                var stats = _logCollector.GetStatistics();
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving log statistics");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("by-level")]
+        public IActionResult GetLogsByLevel(string level = "Information", int count = 100)
+        {
+            try
+            {
+                if (!Enum.TryParse<Microsoft.Extensions.Logging.LogLevel>(level, true, out var logLevel))
+                {
+                    return BadRequest(new { error = "Invalid log level" });
+                }
+
+                var logs = _logCollector.GetLogsByLevel(logLevel, count);
+                return Ok(logs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving logs by level");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("by-category")]
+        public IActionResult GetLogsByCategory(string category, int count = 100)
+        {
+            try
+            {
+                var logs = _logCollector.GetLogsByCategory(category, count);
+                return Ok(logs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving logs by category");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("clear")]
+        public IActionResult ClearLogs()
+        {
+            try
+            {
+                _logCollector.ClearLogs();
+                _logger.LogInformation("Log history cleared by user");
+                return Ok(new { success = true, message = "Log history cleared successfully" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing logs");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("export")]
+        public IActionResult ExportLogs(int count = 1000)
+        {
+            try
+            {
+                var logs = _logCollector.GetRecentLogs(count);
+                var logText = string.Join("\n", logs.Select(log =>
+                    $"[{log.Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{log.Level}] [{log.Category}] {log.Message}" +
+                    (string.IsNullOrEmpty(log.Exception) ? "" : $"\n  Exception: {log.Exception}")
+                ));
+
+                var bytes = System.Text.Encoding.UTF8.GetBytes(logText);
+                var fileName = $"loxone-hue-bridge-logs-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.txt";
+                
+                return File(bytes, "text/plain", fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error exporting logs");
                 return BadRequest(new { error = ex.Message });
             }
         }

@@ -1,7 +1,10 @@
 using LoxoneHueBridge.Core.Extensions;
+using LoxoneHueBridge.Web.Services;
+using LoxoneHueBridge.Web.Infrastructure;
+using Microsoft.AspNetCore.SignalR;
 using Serilog;
 
-// Configure Serilog
+// Initial Serilog configuration (will be reconfigured later with custom sinks)
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(new ConfigurationBuilder()
         .AddJsonFile("appsettings.json")
@@ -23,10 +26,22 @@ try
     builder.Services.AddControllers();
     builder.Services.AddSignalR();
     
+    // Add log collector service
+    builder.Services.AddSingleton<ILogCollectorService, LogCollectorService>();
+    
     // Add Core services
     builder.Services.AddLoxoneHueBridgeCore(builder.Configuration);
 
     var app = builder.Build();
+
+    // Reconfigure Serilog with custom sinks now that services are available
+    var logCollector = app.Services.GetRequiredService<ILogCollectorService>();
+    var hubContext = app.Services.GetRequiredService<IHubContext<LoggingHub>>();
+    
+    Log.Logger = new LoggerConfiguration()
+        .ReadFrom.Configuration(app.Configuration)
+        .WriteTo.LogCollectorSink(logCollector, hubContext)
+        .CreateLogger();
 
     // Configure the HTTP request pipeline
     if (!app.Environment.IsDevelopment())
