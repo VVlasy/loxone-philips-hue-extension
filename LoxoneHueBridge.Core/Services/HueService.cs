@@ -30,8 +30,7 @@ public interface IHueService
     Task<bool> ActivateSceneAsync(string sceneId, CancellationToken cancellationToken = default);
     Task<BridgeStatus?> GetBridgeStatusAsync();
     Task UnpairFromBridgeAsync();
-    bool IsConnected { get; }
-    string? BridgeIp { get; }
+    BridgeStatus? BridgeStatus { get; }
 }
 
 public class HueService : IHueService
@@ -39,15 +38,45 @@ public class HueService : IHueService
     private readonly ILogger<HueService> _logger;
     private readonly IOptionsMonitor<LoxoneHueBridgeConfig> _config;
     private LocalHueApi? _client;
-    private string? _bridgeIp;
+    private BridgeStatus? _bridgeStatus = null;
 
-    public bool IsConnected => _client != null && !string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey);
-    public string? BridgeIp => _bridgeIp;
+    public BridgeStatus? BridgeStatus => _bridgeStatus;
 
     public HueService(ILogger<HueService> logger, IOptionsMonitor<LoxoneHueBridgeConfig> config)
     {
         _logger = logger;
         _config = config;
+        
+        // Initialize bridge status with current configuration
+        UpdateBridgeStatusFromConfig();
+    }
+
+    private void UpdateBridgeStatusFromConfig()
+    {
+        var config = _config.CurrentValue.HueBridge;
+        
+        // Only create bridge status if we have some bridge information
+        if (!config.AutoDiscover && !string.IsNullOrEmpty(config.ManualIpAddress))
+        {
+            _bridgeStatus = new BridgeStatus
+            {
+                IpAddress = config.ManualIpAddress,
+                IsPaired = !string.IsNullOrEmpty(config.AppKey),
+                AppKey = config.AppKey,
+                IsConnected = false
+            };
+        }
+        else if (!string.IsNullOrEmpty(config.AppKey))
+        {
+            // We have credentials but no IP - this means we were paired before
+            _bridgeStatus = new BridgeStatus
+            {
+                IsPaired = true,
+                AppKey = config.AppKey,
+                IsConnected = false
+            };
+        }
+        // If no manual IP and no app key, leave _bridgeStatus as null (no bridge discovered)
     }
 
     public async Task<bool> DiscoverBridgeAsync(CancellationToken cancellationToken = default)
