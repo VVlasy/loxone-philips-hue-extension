@@ -87,8 +87,14 @@ public class HueService : IHueService
             
             if (!config.AutoDiscover && !string.IsNullOrEmpty(config.ManualIpAddress))
             {
-                _bridgeIp = config.ManualIpAddress;
-                _logger.LogInformation("Using manual Hue Bridge IP: {BridgeIp}", _bridgeIp);
+                _bridgeStatus = new BridgeStatus
+                {
+                    IpAddress = config.ManualIpAddress,
+                    IsPaired = !string.IsNullOrEmpty(config.AppKey),
+                    AppKey = config.AppKey,
+                    IsConnected = false
+                };
+                _logger.LogInformation("Using manual Hue Bridge IP: {BridgeIp}", _bridgeStatus.IpAddress);
                 return true;
             }
 
@@ -104,8 +110,15 @@ public class HueService : IHueService
                 return false;
             }
 
-            _bridgeIp = bridge.IpAddress;
-            _logger.LogInformation("Discovered Hue Bridge at IP: {BridgeIp}", _bridgeIp);
+            _bridgeStatus = new BridgeStatus
+            {
+                IpAddress = bridge.IpAddress,
+                BridgeId = bridge.BridgeId,
+                IsPaired = !string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey),
+                AppKey = _config.CurrentValue.HueBridge.AppKey,
+                IsConnected = false
+            };
+            _logger.LogInformation("Discovered Hue Bridge at IP: {BridgeIp}", _bridgeStatus.IpAddress);
             return true;
         }
         catch (Exception ex)
@@ -117,7 +130,7 @@ public class HueService : IHueService
 
     public async Task<string?> PairWithBridgeAsync(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(_bridgeIp))
+        if (string.IsNullOrEmpty(_bridgeStatus?.IpAddress))
         {
             _logger.LogWarning("Cannot pair: Bridge IP not set. Run discovery first.");
             return null;
@@ -126,9 +139,9 @@ public class HueService : IHueService
         try
         {
             var config = _config.CurrentValue.HueBridge;
-            _logger.LogInformation("Attempting to pair with Hue Bridge at {BridgeIp}...", _bridgeIp);
+            _logger.LogInformation("Attempting to pair with Hue Bridge at {BridgeIp}...", _bridgeStatus.IpAddress);
             
-            var result = await LocalHueApi.RegisterAsync(_bridgeIp, config.ApplicationName, config.DeviceName);
+            var result = await LocalHueApi.RegisterAsync(_bridgeStatus.IpAddress, config.ApplicationName, config.DeviceName);
             
             if (result?.Username != null)
             {
@@ -136,7 +149,12 @@ public class HueService : IHueService
                 _logger.LogInformation("Successfully paired with Hue Bridge. App Key: {AppKey}", appKey);
                 
                 // Initialize client with new app key
-                _client = new LocalHueApi(_bridgeIp, appKey);
+                _client = new LocalHueApi(_bridgeStatus.IpAddress, appKey);
+                
+                // Update bridge status with pairing info
+                _bridgeStatus.IsPaired = true;
+                _bridgeStatus.AppKey = appKey;
+                _bridgeStatus.IsConnected = true;
                 
                 return appKey;
             }
