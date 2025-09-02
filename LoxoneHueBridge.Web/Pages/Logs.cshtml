@@ -118,7 +118,7 @@
                 .withAutomaticReconnect()
                 .build();
 
-            connection.on("LogReceived", function (logEntry) {
+            connection.on("LogEvent", function (logEntry) {
                 addLogEntry(logEntry);
                 updateStatistics(logEntry);
             });

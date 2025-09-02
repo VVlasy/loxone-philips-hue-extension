@@ -33,8 +33,8 @@ public class LogCollectorSink : ILogEventSink
             // Add to collector
             _logCollector.AddLogEntry(logEntry);
 
-            // Send to SignalR hub for real-time updates
-            _hubContext?.Clients.Group("Logs").SendAsync("LogReceived", logEntry);
+            // Send to SignalR hub for real-time updates - use "Logs" group to match the frontend
+            _hubContext?.Clients.Group("Logs").SendAsync("LogEvent", logEntry);
         }
         catch
         {

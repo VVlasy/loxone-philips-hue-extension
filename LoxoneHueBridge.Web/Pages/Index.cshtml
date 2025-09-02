@@ -189,7 +189,7 @@
 
             connection.start().then(function () {
                 console.log("SignalR connected");
-                connection.invoke("JoinGroup", "dashboard");
+                connection.invoke("JoinGroup", "Logs");
             }).catch(function (err) {
                 console.error("SignalR connection failed: " + err.toString());
                 addLogEntry("Warning: Real-time updates unavailable - " + err.toString());
