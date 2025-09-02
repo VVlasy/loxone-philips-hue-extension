@@ -4,9 +4,11 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RestoreClientSidePackages>true</RestoreClientSidePackages>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.LibraryManager.Build" Version="2.1.175" />
     <PackageReference Include="HueApi" Version="1.9.0" />
     <PackageReference Include="HueApi.ColorConverters" Version="1.7.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />

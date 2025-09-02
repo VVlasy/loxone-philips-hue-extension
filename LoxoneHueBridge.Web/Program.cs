@@ -58,17 +58,6 @@ try
     app.MapControllers();
     app.MapHub<LoggingHub>("/loggingHub");
 
-    // API endpoints
-    app.MapGet("/api/status", (IServiceProvider services) =>
-    {
-        // Simple status endpoint
-        return Results.Ok(new { 
-            Status = "Running", 
-            Timestamp = DateTime.UtcNow,
-            Version = "1.0.0"
-        });
-    });
-
     // Log the URLs the application will listen on
     var urls = app.Configuration["ASPNETCORE_URLS"] ?? 
                app.Configuration.GetSection("Kestrel:Endpoints:Http:Url").Value ?? 
