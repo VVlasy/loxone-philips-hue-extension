@@ -447,31 +447,70 @@ public class HueService : IHueService
     {
         try
         {
-            if (string.IsNullOrEmpty(_bridgeIp) || string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey))
+            var appKey = _config.CurrentValue.HueBridge.AppKey;
+            var isPaired = !string.IsNullOrEmpty(appKey);
+            
+            // If no bridge status and no app key, return null (no bridge discovered)
+            if (_bridgeStatus == null && !isPaired)
             {
-                return new BridgeStatus { IsConnected = false };
+                return null;
+            }
+            
+            // If we have credentials but no bridge status, create one
+            if (_bridgeStatus == null && isPaired)
+            {
+                _bridgeStatus = new BridgeStatus
+                {
+                    IsPaired = true,
+                    AppKey = appKey,
+                    IsConnected = false
+                };
+            }
+            
+            // Update pairing status from configuration
+            if (_bridgeStatus != null)
+            {
+                _bridgeStatus.IsPaired = isPaired;
+                _bridgeStatus.AppKey = appKey;
+            }
+            
+            if (string.IsNullOrEmpty(_bridgeStatus?.IpAddress))
+            {
+                return _bridgeStatus; // Bridge status exists but no IP known
+            }
+
+            if (!isPaired)
+            {
+                // Bridge discovered but not paired
+                return _bridgeStatus;
             }
 
             if (_client == null)
             {
-                _client = new LocalHueApi(_bridgeIp, _config.CurrentValue.HueBridge.AppKey);
+                _client = new LocalHueApi(_bridgeStatus.IpAddress, appKey);
             }
 
             var bridge = await _client.GetBridgeAsync();
             var bridgeData = bridge?.Data?.FirstOrDefault();
 
-            return new BridgeStatus
-            {
-                IsConnected = true,
-                IpAddress = _bridgeIp,
-                BridgeId = bridgeData?.Id != Guid.Empty ? bridgeData?.Id.ToString() : "Unknown",
-                ApiVersion = bridgeData?.Metadata?.Archetype?? "Unknown"
-            };
+            _bridgeStatus.IsConnected = true;
+            _bridgeStatus.IsPaired = true;
+            _bridgeStatus.BridgeId = bridgeData?.Id != Guid.Empty ? bridgeData?.Id.ToString() : _bridgeStatus.BridgeId ?? "Unknown";
+            _bridgeStatus.ApiVersion = bridgeData?.Metadata?.Archetype ?? "Unknown";
+
+            return _bridgeStatus;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting bridge status");
-            return new BridgeStatus { IsConnected = false };
+            if (_bridgeStatus != null)
+            {
+                _bridgeStatus.IsConnected = false;
+                // Keep pairing status based on configuration
+                _bridgeStatus.IsPaired = !string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey);
+                _bridgeStatus.AppKey = _config.CurrentValue.HueBridge.AppKey;
+            }
+            return _bridgeStatus;
         }
     }
 
