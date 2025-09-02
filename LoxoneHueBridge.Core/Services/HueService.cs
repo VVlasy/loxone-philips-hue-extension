@@ -178,21 +178,46 @@ public class HueService : IHueService
             if (_client == null)
             {
                 var appKey = _config.CurrentValue.HueBridge.AppKey;
-                if (string.IsNullOrEmpty(_bridgeIp) || string.IsNullOrEmpty(appKey))
+                if (string.IsNullOrEmpty(_bridgeStatus?.IpAddress))
                 {
+                    if (_bridgeStatus != null)
+                    {
+                        _bridgeStatus.IsConnected = false;
+                        _bridgeStatus.IsPaired = false;
+                    }
                     return false;
                 }
                 
-                _client = new LocalHueApi(_bridgeIp, appKey);
+                if (string.IsNullOrEmpty(appKey))
+                {
+                    // Can reach bridge but not paired
+                    _bridgeStatus.IsConnected = true;
+                    _bridgeStatus.IsPaired = false;
+                    return false;
+                }
+                
+                _client = new LocalHueApi(_bridgeStatus.IpAddress, appKey);
             }
 
             var config = await _client.GetBridgeAsync();
+            if (_bridgeStatus != null)
+            {
+                _bridgeStatus.IsConnected = true;
+                _bridgeStatus.IsPaired = true;
+            }
             _logger.LogDebug("Connection test successful. Bridge name: {BridgeName}", config?.Data?.FirstOrDefault()?.Metadata?.Name);
             return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Connection test failed");
+            // Could be connection issue or authentication issue
+            if (_bridgeStatus != null)
+            {
+                _bridgeStatus.IsConnected = false;
+                // Keep paired status based on whether we have credentials
+                _bridgeStatus.IsPaired = !string.IsNullOrEmpty(_config.CurrentValue.HueBridge.AppKey);
+            }
             return false;
         }
     }
