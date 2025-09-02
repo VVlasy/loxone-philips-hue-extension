@@ -426,7 +426,13 @@ public class HueService : IHueService
     {
         try
         {
-            _bridgeIp = bridgeIp;
+            // Create or update bridge status with the provided IP
+            if (_bridgeStatus == null)
+            {
+                _bridgeStatus = new BridgeStatus();
+            }
+            _bridgeStatus.IpAddress = bridgeIp;
+            
             var appKey = await PairWithBridgeAsync(cancellationToken);
             return !string.IsNullOrEmpty(appKey);
         }
@@ -477,7 +483,13 @@ public class HueService : IHueService
             // Note: In a real implementation, you would update the configuration file
             _logger.LogInformation("Unpaired from Hue Bridge");
             _client = null;
-            _bridgeIp = null;
+            
+            if (_bridgeStatus != null)
+            {
+                _bridgeStatus.IsPaired = false;
+                _bridgeStatus.AppKey = null;
+                _bridgeStatus.IsConnected = false;
+            }
         }
         catch (Exception ex)
         {
